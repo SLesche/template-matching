@@ -33,6 +33,7 @@ classdef review_app < matlab.apps.AppBase
         erp_mat double % The data matrix with subject X channels X times X bins
         time_vector double % The vector showing times
         results_mat double % Results matrix with subject X bins X n_params
+        ga_latencies double % Latencies of the grand average
         subject double % Subject number
         method double % Method number
         baseline_method double % Number of method in method table to base review on
@@ -68,10 +69,10 @@ classdef review_app < matlab.apps.AppBase
         % Specify review params
         function specify_review_params(app)
             % Prompt the user for input using a dialog box
-            prompt = {'Name of dataset:', 'Name of time vector:', 'Name of method table:', 'Baseline method:', 'Cutoff:', 'Y-Limit: Upper', 'Y-Limit: Lower', 'Name of results matrix (optional):'};
+            prompt = {'Name of dataset:', 'Name of time vector:', 'Name of method table:', 'Baseline method:', 'Cutoff:', 'Y-Limit: Upper', 'Y-Limit: Lower', 'Name of results matrix (optional):', 'Name of GA latencies (optional):'};
             dlgTitle = 'Set Review Params';
             numLines = 1;
-            defaultInput = {'erp_data', 'time_vec', 'method_table', '1', '1', '-5', '9', ''};
+            defaultInput = {'erp_data', 'time_vec', 'method_table', '1', '1', '-5', '9', '', ''};
         
             userInput = inputdlg(prompt, dlgTitle, numLines, defaultInput);
         
@@ -114,6 +115,15 @@ classdef review_app < matlab.apps.AppBase
                     error('Results matrix does not match the data matrix');
                 end
             end
+
+            if ~isempty(userInput{9})
+                app.ga_latencies = evalin('base', userInput{9});
+                n_bins = size(app.erp_mat, 4);
+
+                if length(app.ga_latencies) ~= n_bins
+                    error('This vector should contain one latency per bin');
+                end
+            end
         end
 
         % Function fetching the current method, subject, bin combo
@@ -130,10 +140,17 @@ classdef review_app < matlab.apps.AppBase
             app.final_mat = final_review_mat;
         end
 
-        function [a_param, b_param, latency, fit_cor, fit_dist] = extract_optimized_params(app)
+        function [a_param, b_param, latency, fit_cor, fit_dist] = extract_optimized_params(app, source)
+            if ~exist('source', 'var')
+                source = "reviewed";
+            end
             % This function just return the previously optimized params by
             % the baseline optimization method
-            values = app.results_mat(app.subject, app.bin, :);
+            if source == "original"
+                values = app.results_mat(app.subject, app.bin, :);
+            else
+                values = app.final_mat(app.subject, app.bin, :);
+            end
             a_param = values(1);
             b_param = values(2);
             latency = values(3);
@@ -193,7 +210,11 @@ classdef review_app < matlab.apps.AppBase
             ga = squeeze(mean(app.erp_mat(:, electrodes, :, current_bin), 1, 'omitnan'));
 
             if is_template_matching
-                lat_ga = approx_peak_latency(time_vec, ga, [window(1) window(2)], polarity);
+                if isempty(app.ga_latencies)
+                    lat_ga = approx_peak_latency(time_vec, ga, [window(1) window(2)], polarity);
+                else
+                    lat_ga = app.ga_latencies(current_bin);
+                end         
                 signal = squeeze(app.erp_mat(current_subject, electrodes, :, current_bin));
                 if all(isnan(signal)) || all(signal == 0)
                     [a_param, b_param, latency, fit_cor, fit_dist] = NaN;
@@ -259,7 +280,11 @@ classdef review_app < matlab.apps.AppBase
             ga = squeeze(mean(app.erp_mat(:, electrodes, :, current_bin), 1, 'omitnan'));
 
             if is_template_matching
-                lat_ga = approx_peak_latency(time_vec, ga, [window(1) window(2)], polarity);
+                if isempty(app.ga_latencies)
+                    lat_ga = approx_peak_latency(time_vec, ga, [window(1) window(2)], polarity);
+                else
+                    lat_ga = app.ga_latencies(current_bin);
+                end  
                 signal = squeeze(app.erp_mat(current_subject, electrodes, :, current_bin));
                 if all(isnan(signal)) || all(signal == 0)
                     [a_param, b_param, latency, fit_cor, fit_dist] = NaN;
@@ -596,14 +621,17 @@ classdef review_app < matlab.apps.AppBase
             app.final_mat(subject, bin, :) = [a, b, latency, fit_cor, fit_dist, review];
         end
 
-        function restore_default_plot(app)
+        function restore_default_plot(app, source)
+            if ~exist('source', 'var')
+                source = "final";
+            end
             % reload all plots for that subject, set a and b to their
             % solutions
             app.method = app.baseline_method;
             app.subject = app.review_mat(app.ireview, 1);
             app.bin = app.review_mat(app.ireview, 2);
-            [app.a_param, app.b_param, ~, ~, ~] = extract_optimized_params(app);
-            [app.a_param_continuous, app.b_param_continuous, ~, ~, ~] = extract_optimized_params(app);
+            [app.a_param, app.b_param, ~, ~, ~] = extract_optimized_params(app, source);
+            [app.a_param_continuous, app.b_param_continuous, ~, ~, ~] = extract_optimized_params(app, source);
             app.bin_selection_field.Value = '';
             update_param_displays(app)
             plot_latency(app)
@@ -635,7 +663,7 @@ classdef review_app < matlab.apps.AppBase
         % Button pushed function: reject_button
         function reject_buttonButtonPushed(app, event)
             % reject the default values
-            restore_default_plot(app)
+            restore_default_plot(app, "original")
             [a, b, latency, fit_cor, fit_dist] = extract_optimized_params(app);
             
             % write reject info into struct
@@ -653,7 +681,7 @@ classdef review_app < matlab.apps.AppBase
         % Button pushed function: manual_button
         function manual_buttonButtonPushed(app, event)
             % Figure out whether values have been changed or not
-            [initial_a, initial_b, ~, ~, ~] = extract_optimized_params(app);
+            [initial_a, initial_b, ~, ~, ~] = extract_optimized_params(app, "original");
             
             if initial_a == app.a_param && initial_b == app.b_param
                 review_method = 1; % accepted
@@ -679,7 +707,7 @@ classdef review_app < matlab.apps.AppBase
 
         function restore_buttonButtonPushed(app, event)
             % If restore defaults
-            restore_default_plot(app)
+            restore_default_plot(app, "original")
         end
 
 
