@@ -51,7 +51,12 @@ load(file)
 erp_data = erp_mat(:, :, :, condition_bins); % Only fit data for the condition bins that are relevant
 [n_subjects, n_chans, n_times, n_bins] = size(erp_data);
 
+% If you can use the Parallel Computing Toolbox
 results_mat = run_template_matching(erp_data, time_vec, comb, 3); % Run the third (3) method saved in comb. You can run any 
+% results_mat = run_template_matching_serial(erp_data, time_vec, comb, 3); % Much slower!
+
+% The results matrix will consist of 5 columns and n_subjects rows
+% the columns will be: a_param, b_param, latency, fit_cor, fit_dist
 
 % Initialize the review app
 % review_app
