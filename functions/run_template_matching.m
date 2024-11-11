@@ -35,8 +35,10 @@ function [results_mat] = run_template_matching(erp_mat, time_vec, method_table, 
 
     if table2array(baseline_method_entry(1, "approach")) == "minsq"
         eval_function = @eval_sum_of_squares;
+        fix_a_param = 0;
     elseif table2array(baseline_method_entry(1, "approach")) == "maxcor"
         eval_function = @eval_correlation;
+        fix_a_param = 1;
     end
 
     use_derivative = table2array(baseline_method_entry(1, "use_derivative"));
@@ -63,7 +65,7 @@ function [results_mat] = run_template_matching(erp_mat, time_vec, method_table, 
                     match_results(isubject, :) = NaN;
                 else
                     try
-                        params = run_global_search(define_optim_problem(specify_objective_function(time_vec', signal, ga, [window(1) window(2)], polarity, weight_function, eval_function, normalize_function ,penalty_function, use_derivative)));
+                        params = run_global_search(define_optim_problem(specify_objective_function(time_vec', signal, ga, [window(1) window(2)], polarity, weight_function, eval_function, normalize_function ,penalty_function, use_derivative, fix_a_param), fix_a_param));
                     catch ME
                             % If an error occurs, log the variables and rethrow the error
                         disp('--- An error occurred ---');
@@ -99,6 +101,10 @@ function [results_mat] = run_template_matching(erp_mat, time_vec, method_table, 
                         rethrow(ME);
                     end
 
+                    if fix_a_param == 1
+                        params = [1 params];
+                    end
+                    
                     match_results(isubject, [1 2]) = params;
                     match_results(isubject, 3) = return_matched_latency(params(2), lat_ga);
                     match_results(isubject, [4 5]) = get_fits(time_vec', signal, ga, [window(1) window(2)], polarity, weight_function, params(1), params(2));
