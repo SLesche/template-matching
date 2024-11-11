@@ -17,7 +17,7 @@ n_conditions = length(condition_bins);
 % Convert to cell array with conditionsXn_subject entries 
 component_names = ["p3_flanker"];
 n_components = length(component_names);
-electrodes = [11];
+electrodes = {[11]};
 polarity = ["positive"];
 windows = {[250 600]};
 
@@ -30,16 +30,17 @@ possible_derivative = [0, 1];
 
 % This combines all possible approaches
 % If you only want one specific approach, only create one row of the comb table:
-% method_table = 
+% comb = cell2table({"minsq", "get_normalized_weights", "none", "none", 0, "p3_flanker", "positive", [11], [200 650]}}
+
 comb = combinations(possible_approaches, possible_weights, ...
     possible_penalty, possible_normalization, possible_derivative, ...
     component_names, polarity, electrodes, windows ...
     );
 
 % add peak/area with no weights/normalization/penalty
-comb(end+1, :) = {"peak", "none", "none", "none", 0, component_names, polarity, electrodes, windows};
-comb(end+1, :) = {"area", "none", "none", "none", 0,  component_names, polarity, electrodes, windows};
-comb(end+1, :) = {"liesefeld_area", "none", "none", "none", 0,  component_names, polarity, electrodes, windows};
+comb(end+1, :) = {"peak", "none", "none", "none", 0, component_names(1), polarity(1), electrodes{1}, windows{1}};
+comb(end+1, :) = {"area", "none", "none", "none", 0,  component_names(1), polarity(1), electrodes{1}, windows{1}};
+comb(end+1, :) = {"liesefeld_area", "none", "none", "none", 0,  component_names(1), polarity(1), electrodes{1}, windows{1}};
 
 column_names = {'approach', 'weight', 'penalty', 'normalization', 'use_derivative', 'component_name', 'polarity', 'electrodes', 'window'};
 comb.Properties.VariableNames = column_names;
